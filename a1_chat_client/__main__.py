@@ -1,4 +1,5 @@
 from argparse import Namespace, ArgumentParser
+import socket
 
 
 def parse_arguments() -> Namespace:
@@ -29,6 +30,8 @@ def main() -> None:
     host: str = args.address
 
     # TODO: Your implementation here
+
+
 
 
 if __name__ == "__main__":
