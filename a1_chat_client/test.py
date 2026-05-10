@@ -77,3 +77,47 @@ def recieve_msg(sock, msg_length):
         recieved_msg += msg_chunk
 
     return recieved_msg.decode("utf-8")
+
+
+"""
+To avoid the 'Framing' problem (for how long should we try to recieve a msg)
+we use length prefix:= sending a prefix of 4 byte with the legth of the msg
+    We use the struct module and the pack function
+or we use a delimiter symbol to signal the end of the msg => '\n'
+For 
+"""
+import struct
+# how to encode for length prefix 
+message = "This is our msg"
+data = message.encode("utf-8")
+
+# here 'I' means unsigned 4-byte integer 
+# this creates the header containing the leght 
+header = struct.pack('!I',  len(data))
+full_data = header + header 
+
+# send data
+send_msg(socket, full_data)
+
+
+### recieving a msg with a prefix 
+def recv_msg_nprefix(sock):
+
+    # read the length prefix 
+    prefix_data = struct.unpack('!I', prefix_data)[0]
+    msg_len = prefix_data.decode("uft-8")
+
+    recieved_data = b""
+    
+    while len(recieved_data) < msg_len:
+
+        # current data being recieved 
+        cdata = sock.recv(4096)
+
+        if not cdata:
+            print("Socket is closed.")
+            break 
+
+        recieved_data += cdata
+    
+    return recieved_data.decode("uft-8")
