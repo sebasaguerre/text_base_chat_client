@@ -94,25 +94,43 @@ data = message.encode("utf-8")
 # here 'I' means unsigned 4-byte integer 
 # this creates the header containing the leght 
 header = struct.pack('!I',  len(data))
-full_data = header + header 
+full_data = header + data 
 
 # send data
 send_msg(socket, full_data)
 
+def send_mgs_wpref(sock, msg):
+    # how to encode for length prefix 
+    data = msg.encode("utf-8")
+
+    # create msg with 
+    header = struct.pack('!I',  len(data))
+    full_data = header + data 
+
+    # send data
+    send_msg(socket, full_data)
 
 ### recieving a msg with a prefix 
-def recv_msg_nprefix(sock):
+def recv_msg_wpref(sock):
 
-    # read the length prefix 
-    prefix_data = struct.unpack('!I', prefix_data)[0]
-    msg_len = prefix_data.decode("uft-8")
+    # recieve prefix
+    prefix = b""
+    while len(prefix) < 4:
+        chunck = sock.recv(4 - len(prefix))
+        if not chunck: return None 
+        prefix += chunck 
+
+    # convert binary  4-bytes into integer 
+    msg_len = struct.unpack("!I", prefix)[0]
 
     recieved_data = b""
     
     while len(recieved_data) < msg_len:
 
+        # only ask required byte size using 4096
+        bytes_to_pull = min(4096, msg_len - recieved_data )
         # current data being recieved 
-        cdata = sock.recv(4096)
+        cdata = sock.recv(bytes_to_pull)
 
         if not cdata:
             print("Socket is closed.")
@@ -120,4 +138,43 @@ def recv_msg_nprefix(sock):
 
         recieved_data += cdata
     
+    # return message 
     return recieved_data.decode("uft-8")
+
+    
+"""
+For testing and enabling the server to restart without locking-in the port
+this must be executed after you create a socket 
+
+"""
+sock = socket.socket()
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+#############################################################################################
+
+"""
+since networking can be "dirty" we use try and except blocks:
+""" 
+
+# Create the socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+# Set the REUSE flag (CRITICAL for testing)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+try:
+    # Connect to the host
+    sock.connect(("127.0.0.1", 4321))
+    
+    # Attempt to send/receive
+    message = "Hello Network!".encode("utf-8")
+    sock.send_msg_wpref(message) # Note: In your real code, use your while-loop for sending!
+    
+    answer = recv_msg_wpref(sock)
+
+except OSError as e:
+    # If the server isn't running or the connection drops, you end up here
+    print(f"A networking error occurred: {e}")
+
+finally:
+    # This runs no matter what, ensuring the socket closes properly
+    sock.close()
