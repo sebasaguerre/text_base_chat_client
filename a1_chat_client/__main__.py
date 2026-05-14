@@ -1,6 +1,8 @@
 from argparse import Namespace, ArgumentParser
 import socket
-import struct
+import select
+
+FORBIDDEN_CHARS = set("!@#$%^&* ")
 
 
 def parse_arguments() -> Namespace:
@@ -23,22 +25,18 @@ def parse_arguments() -> Namespace:
                       type=int, help="Set server port", default=5378)
     return parser.parse_args()
 
-def send_msg_wpref(sock, msg):
+def send_msg(sock, msg):
     
     # conver messge to binary 
-    data = msg.encode("utf-8")
-    # create msg with prefix
-    header = struct.pack('!I',  len(data))
-    prefixed_data = header + data
-
-    total_len = len(prefixed_data)
+    data = msg.encode("utf-8") + b"\n"
+    total_len = len(data)
     bsent = 0 
 
     # send data 
     while bsent < total_len:
         
         # amount of data left to send 
-        remaining_data = prefixed_data[bsent:]
+        remaining_data = data[bsent:]
         # amount of bytes sent 
         bsent_now = sock.send(remaining_data)
 
@@ -46,39 +44,67 @@ def send_msg_wpref(sock, msg):
             raise RuntimeError("Socket connection broke")
         
         bsent += bsent_now
+
+def handle_msg(msg):
+    pass
+
+def recv_msg(sock, buffer):
+
+    recv_data = b""
     
-    print("Msg sent successfully")
+    while True:
+        # recieve data chunck
+        chunck = sock.recv(1024).decode("utf-8")
 
+        # check if chunck is empty
+        if chunck == "":
+            break
+        
+        recieved_msg += chunck
 
-def recv_msg_wpref(sock):
+        # check for delimiter 
+        while "\n" in recv_data:
+            msg, recv_data = recv_data.split("\n", 1) 
+            handle_msg(msg)
 
-    # recieve prefix
-    prefix = b""
-    while len(prefix) < 4:
-        chunck = sock.recv(4 - len(prefix))
-        if not chunck: return None 
-        prefix += chunck 
+def recv_line(sock, buffer):
+    # recieve data until delimiter is encounterd
+    while "\n" not in buffer[0]:
+        chunk = sock.recv(4096)
 
-    # convert binary  4-bytes into integer 
-    msg_len = struct.unpack("!I", prefix)[0]
-
-    recieved_data = b""
+        # check if chuck is empty
+        if not chunk:
+            return None 
+        
+        buffer[0] += chunk.decode("utf-8")
+        
+        # attempt to extract line from buffer
+        line, buffer[0] = buffer[0].split("\n", 1)
     
-    while len(recieved_data) < msg_len:
+    return line
 
-        # only ask required byte size using 4096
-        bytes_to_pull = min(4096, msg_len - recieved_data )
-        # current data being recieved 
-        cdata = sock.recv(bytes_to_pull)
 
-        if not cdata:
-            print("Socket is closed.")
-            break 
 
-        recieved_data += cdata
+def handle_server_msg(line):
+    pass
+
+def handle_user_input(sock, line):
+    pass
+
+# authentification and login functions 
+
+def contain_forbidden_chars(name):
+    "Check if usarename contains any forbidden chars"
+    return any(char in FORBIDDEN_CHARS for char in name)
+
+def login(sock, buffer):
+    """
+    Handle login sequence. 
+    Returns True if succesful login or False otherwise
+    """
+
+    print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
     
-    # return message 
-    return recieved_data.decode("uft-8")
 
 
 
