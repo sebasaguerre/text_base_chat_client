@@ -109,6 +109,7 @@ def handle_user_input(sock, line):
     # recieve list of currently active users 
     elif line == "!who":
         send_msg(sock, "LIST")
+        return True 
     
     # user and message processing
     elif line.startswith("@"):
@@ -119,6 +120,7 @@ def handle_user_input(sock, line):
             dest_user = parts[0][1:]
             msg = parts[1]
             send_msg(sock, f"SEND {dest_user} {msg}")
+            return True 
 
     # ignore input that does not follow the above commands 
 
