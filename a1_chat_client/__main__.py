@@ -32,6 +32,7 @@ def send_msg(sock, msg):
     data = msg.encode("utf-8") + b"\n"
     total_len = len(data)
     bsent = 0 
+    print(f"[DEBUG] senginf raw bytes: {data!r}")
 
     # send data 
     while bsent < total_len:
@@ -45,28 +46,27 @@ def send_msg(sock, msg):
             raise RuntimeError("Socket connection broke")
         
         bsent += bsent_now
-
-def handle_msg(msg):
-    pass
-
-def recv_msg(sock, buffer):
-
-    recv_data = b""
     
-    while True:
-        # recieve data chunck
-        chunck = sock.recv(1024).decode("utf-8")
+    print(f"[DEBUG] sent {bsent} bytes")
 
-        # check if chunck is empty
-        if chunck == "":
-            break
+# def recv_msg(sock, buffer):
+
+#     recv_data = b""
+    
+#     while True:
+#         # recieve data chunck
+#         chunck = sock.recv(1024).decode("utf-8")
+
+#         # check if chunck is empty
+#         if chunck == "":
+#             break
         
-        recieved_msg += chunck
+#         recieved_msg += chunck
 
-        # check for delimiter 
-        while "\n" in recv_data:
-            msg, recv_data = recv_data.split("\n", 1) 
-            handle_msg(msg)
+#         # check for delimiter 
+#         while "\n" in recv_data:
+#             msg, recv_data = recv_data.split("\n", 1) 
+#             handle_msg(msg)
 
 def recv_line(sock, buffer):
     # recieve data until delimiter is encounterd
@@ -76,6 +76,7 @@ def recv_line(sock, buffer):
         # check if chuck is empty
         if not chunk:
             return None 
+        
         
         buffer[0] += chunk.decode("utf-8")
         
@@ -166,7 +167,9 @@ def login(sock, buffer):
             
             # send msg to server
             send_msg(sock, f"HELLO-FROM {username}")
-            response = recv_line(sock)
+            print(f"[DEBUG] msg sent during login")
+            response = recv_line(sock, buffer)
+            print(f"[DEBUG] response by server recieved: {response}")
 
             if response is None:
                 return False 
@@ -195,9 +198,6 @@ def main() -> None:
     port: int = args.port
     host: str = args.address
 
-    # get username via input 
-    username = input("Username: ").strip()
-
     # open up a socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -222,7 +222,8 @@ def main() -> None:
             
             # check file is socket 
             if fd is sock: 
-                line = recv_line(sock)
+                line = recv_line(sock, buffer)
+                print(f"[DEBUG] raw response {line!r}")
 
                 if line is None:
                     print("Disconnected from server.")
