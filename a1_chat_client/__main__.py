@@ -49,27 +49,8 @@ def send_msg(sock, msg):
     
     print(f"[DEBUG] sent {bsent} bytes")
 
-# def recv_msg(sock, buffer):
-
-#     recv_data = b""
-    
-#     while True:
-#         # recieve data chunck
-#         chunck = sock.recv(1024).decode("utf-8")
-
-#         # check if chunck is empty
-#         if chunck == "":
-#             break
-        
-#         recieved_msg += chunck
-
-#         # check for delimiter 
-#         while "\n" in recv_data:
-#             msg, recv_data = recv_data.split("\n", 1) 
-#             handle_msg(msg)
-
 def recv_line(sock, buffer):
-    
+
     print(f"[DEBUG] recv_line called, socket fd={sock.fileno()}")
     # recieve data until delimiter is encounterd
     while "\n" not in buffer[0]:
@@ -79,12 +60,11 @@ def recv_line(sock, buffer):
         if not chunk:
             return None 
         
-        
         buffer[0] += chunk.decode("utf-8")
         
-        # attempt to extract line from buffer
-        line, buffer[0] = buffer[0].split("\n", 1)
-    
+    # extract line from buffer
+    line, buffer[0] = buffer[0].split("\n", 1)
+
     return line
 
 def handle_server_msg(line):
@@ -92,7 +72,7 @@ def handle_server_msg(line):
     check for every server response interpret them
     """
     if line.startswith("DELIVERY "):
-        parts = line.splits(" ", 2)
+        parts = line.split(" ", 2)
         if len(parts) == 3:
             print(f"From {parts[1]}: {parts[2]}")
 
@@ -131,7 +111,7 @@ def handle_user_input(sock, line):
         send_msg(sock, "LIST")
     
     # user and message processing
-    elif line.startwith("@"):
+    elif line.startswith("@"):
         # @[usrname] [message]
         parts = line.split(" ", 1)
         # send message 
@@ -168,8 +148,9 @@ def login(sock, buffer):
                 continue
             
             # send msg to server
-            send_msg(sock, f"HELLO-FROM {username}")
-            print(f"[DEBUG] msg sent during login")
+            msg = f"HELLO-FROM {username}"
+            send_msg(sock, msg)
+            print(f"[DEBUG] msg being seng {msg}")
             response = recv_line(sock, buffer)
             print(f"[DEBUG] response by server recieved: {response}")
 
@@ -219,7 +200,7 @@ def main() -> None:
     # server-client interaction until smt fails or 
     while True:
 
-        readable, _, _ = select.select([sock, sys.stdin])
+        readable, _, _ = select.select([sock, sys.stdin], [], [])
 
         for fd in readable:
             
