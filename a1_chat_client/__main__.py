@@ -69,6 +69,8 @@ def send_msg(sock, msg):
 #             handle_msg(msg)
 
 def recv_line(sock, buffer):
+    
+    print(f"[DEBUG] recv_line called, socket fd={sock.fileno()}")
     # recieve data until delimiter is encounterd
     while "\n" not in buffer[0]:
         chunk = sock.recv(4096)
@@ -204,9 +206,10 @@ def main() -> None:
 
     # connect socket
     sock.connect((host, port))
+    print(f"[DEBUG] socket fd={sock.fileno()}, peer={sock.getpeername()}, local={sock.getsockname()}")
 
     # buffer to monitor multiple files/interactions
-    buffer = []
+    buffer = [""]
 
     # check if lockin is not succesful 
     if not login(sock, buffer):
@@ -233,7 +236,7 @@ def main() -> None:
                 # process server msg
                 handle_server_msg(line)
             
-            elif fd is sys.stdin():
+            elif fd is sys.stdin:
                 user_line = sys.stdin.readline()
 
                 if not user_line:
