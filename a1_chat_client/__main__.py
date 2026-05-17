@@ -32,7 +32,6 @@ def send_msg(sock, msg):
     data = msg.encode("utf-8") + b"\n"
     total_len = len(data)
     bsent = 0 
-    print(f"[DEBUG] senginf raw bytes: {data!r}")
 
     # send data 
     while bsent < total_len:
@@ -46,12 +45,9 @@ def send_msg(sock, msg):
             raise RuntimeError("Socket connection broke")
         
         bsent += bsent_now
-    
-    print(f"[DEBUG] sent {bsent} bytes")
 
 def recv_line(sock, buffer):
 
-    print(f"[DEBUG] recv_line called, socket fd={sock.fileno()}")
     # recieve data until delimiter is encounterd
     while "\n" not in buffer[0]:
         chunk = sock.recv(4096)
@@ -77,7 +73,7 @@ def handle_server_msg(line):
             print(f"From {parts[1]}: {parts[2]}")
 
     elif line == "SEND-OK":
-        print("The message was sent succesfully")
+        print("The message was sent successfully")
 
     elif line == "BAD-DEST-USER":
         print("The destination user does not exist")
@@ -109,7 +105,6 @@ def handle_user_input(sock, line):
     # recieve list of currently active users 
     elif line == "!who":
         send_msg(sock, "LIST")
-        return True 
     
     # user and message processing
     elif line.startswith("@"):
@@ -120,11 +115,10 @@ def handle_user_input(sock, line):
             dest_user = parts[0][1:]
             msg = parts[1]
             send_msg(sock, f"SEND {dest_user} {msg}")
-            return True 
 
     # ignore input that does not follow the above commands 
 
-# authentification and login functions 
+    return True 
 
 def contains_forbidden_chars(name):
     "Check if usarename contains any forbidden chars"
@@ -152,16 +146,14 @@ def login(sock, buffer):
             # send msg to server
             msg = f"HELLO-FROM {username}"
             send_msg(sock, msg)
-            print(f"[DEBUG] msg being seng {msg}")
             response = recv_line(sock, buffer)
-            print(f"[DEBUG] response by server recieved: {response}")
 
             if response is None:
                 return False 
             
             # validate login 
             if response == f"HELLO {username}":
-                print(f"Succefully logged in as {username}!")
+                print(f"Successfully logged in as {username}!")
                 return True 
             
             # user in use
@@ -189,7 +181,6 @@ def main() -> None:
 
     # connect socket
     sock.connect((host, port))
-    print(f"[DEBUG] socket fd={sock.fileno()}, peer={sock.getpeername()}, local={sock.getsockname()}")
 
     # buffer to monitor multiple files/interactions
     buffer = [""]
@@ -209,7 +200,6 @@ def main() -> None:
             # check file is socket 
             if fd is sock: 
                 line = recv_line(sock, buffer)
-                print(f"[DEBUG] raw response {line!r}")
 
                 if line is None:
                     print("Disconnected from server.")
