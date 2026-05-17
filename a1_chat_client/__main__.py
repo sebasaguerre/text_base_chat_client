@@ -81,7 +81,7 @@ def handle_server_msg(line):
     elif line.startswith("LIST-OK "):
         user_list_str = line[len("LIST-OK "): ]
         users = user_list_str.split(",") if user_list_str else [] 
-        print(f"There are {len(users)} online users: ")
+        print(f"There are {len(users)} online users:")
         for user in users:
             print(user)
 
