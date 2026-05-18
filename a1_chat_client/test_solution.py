@@ -3,7 +3,6 @@ import socket
 import select
 import sys
  
-# @ is intentionally excluded — the server validates it, not the client
 FORBIDDEN_CHARS = set("!#$%^&* ")
  
  
@@ -34,7 +33,7 @@ def send_msg(sock, msg):
  
 def recv_line(sock, buffer):
     """
-    buffer[0] is a bytearray. Reads from sock until a newline is found,
+    buffer[0] is bytes. Reads from sock until a newline is found,
     then returns the decoded line. Returns None if the connection closed.
     """
     while b"\n" not in buffer[0]:
@@ -67,7 +66,7 @@ def handle_server_msg(line):
     elif line.startswith("LIST-OK "):
         user_list_str = line[len("LIST-OK "):]
         users = user_list_str.split(",") if user_list_str else []
-        print(f"There are {len(users)} online users: ", flush=True)
+        print(f"There are {len(users)} online users:", flush=True)
         for user in users:
             print(user, flush=True)
  
@@ -79,9 +78,7 @@ def handle_server_msg(line):
  
  
 def handle_user_input(sock, line):
-    """
-    Parse a line of user input. Returns False if the client should quit.
-    """
+    """Parse a line of user input. Returns False if the client should quit."""
     line = line.strip()
  
     if line == "!quit":
@@ -106,85 +103,72 @@ def contains_forbidden_chars(name):
  
 def login(sock, buffer):
     """
-    Handle login using select() on both sock and stdin simultaneously so:
-      - The prompt is printed before any blocking call
-      - stdin is never frozen while waiting for the server
-      - !quit works at any point during login
-      - stdin lines that arrive while waiting for a server response are
-        returned as a list so main() can replay them as post-login commands
+    Handle login using select() on both sock and stdin simultaneously.
+    The first prompt is printed by main() before connect(), so we do NOT
+    print it here at the start.
  
-    Returns (True, [stashed_lines]) on success, (False, []) on exit/error.
+    Returns True on successful login, False on exit/error.
     """
-    state = 'prompt'        # 'prompt' | 'await_server'
-    pending_username = None
-    stashed_lines = []      # stdin lines received while awaiting server reply
- 
-    print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
+    pending_username = None  # the last username we sent HELLO-FROM for
  
     while True:
         readable, _, _ = select.select([sock, sys.stdin], [], [])
  
         for fd in readable:
  
-            # ── server ───────────────────────────────────────────────────
+            # ── server response ──────────────────────────────────────────
             if fd is sock:
-                # Only process server data if we actually sent a HELLO-FROM
-                if state != 'await_server':
-                    recv_line(sock, buffer)
-                    continue
- 
                 response = recv_line(sock, buffer)
  
                 if response is None:
-                    return False, []
+                    return False
+ 
+                # Ignore server messages if we haven't sent anything yet
+                if pending_username is None:
+                    continue
  
                 if response == f"HELLO {pending_username}":
                     print(f"Successfully logged in as {pending_username}!", flush=True)
-                    return True, stashed_lines
+                    return True
  
                 elif response == "IN-USE":
                     print(f"Cannot log in as {pending_username}. That username is already in use.", flush=True)
-                    state = 'prompt'
                     pending_username = None
                     print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
  
                 elif response == "BUSY":
                     print("Cannot log in. The server is full!", flush=True)
-                    return False, []
+                    return False
  
                 else:
-                    # Any other server rejection (BAD-RQST-HDR, BAD-RQST-BODY, etc.)
+                    # Any other rejection: BAD-RQST-HDR, BAD-RQST-BODY, etc.
                     print(f"Cannot log in as {pending_username}. That username contains disallowed characters.", flush=True)
-                    state = 'prompt'
                     pending_username = None
                     print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
  
-            # ── stdin ────────────────────────────────────────────────────
+            # ── user input ───────────────────────────────────────────────
             elif fd is sys.stdin:
                 raw = sys.stdin.readline()
  
                 if not raw:
-                    return False, []
+                    return False
  
-                text = raw.strip()
+                username = raw.strip()
  
-                if text == "!quit":
-                    return False, []
+                if username == "!quit":
+                    return False
  
-                if state == 'await_server':
-                    # A post-login command arrived before the server replied.
-                    # Stash it; main() will process it after login completes.
-                    stashed_lines.append(raw)
-                    continue
- 
-                if contains_forbidden_chars(text):
-                    print(f"Cannot log in as {text}. That username contains disallowed characters.", flush=True)
+                if contains_forbidden_chars(username):
+                    print(f"Cannot log in as {username}. That username contains disallowed characters.", flush=True)
                     print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
                     continue
  
-                send_msg(sock, f"HELLO-FROM {text}")
-                pending_username = text
-                state = 'await_server'
+                # Send HELLO-FROM and remember which username we used.
+                # If we were already waiting for a server reply, this new
+                # HELLO-FROM simply overwrites the pending username — the
+                # server will reply to the latest one.
+                send_msg(sock, f"HELLO-FROM {username}")
+                pending_username = username
  
  
 def main() -> None:
@@ -192,22 +176,19 @@ def main() -> None:
     port: int = args.port
     host: str = args.address
  
+    # Print the prompt BEFORE connect() so the test sees it immediately,
+    # even if the server is slow to accept the connection.
+    print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
+ 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.connect((host, port))
  
     buffer = [b""]
  
-    success, stashed_lines = login(sock, buffer)
-    if not success:
+    if not login(sock, buffer):
         sock.close()
         return
- 
-    # Replay any stdin lines that arrived during the login handshake
-    for line in stashed_lines:
-        if not handle_user_input(sock, line):
-            sock.close()
-            return
  
     # Main event loop
     while True:
