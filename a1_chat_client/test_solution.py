@@ -110,6 +110,14 @@ def login(sock, buffer):
       - None  → haven't sent anything yet, waiting for user to type
       - "foo" → sent HELLO-FROM foo, waiting for the server to reply
 
+    When new stdin arrives while waiting for a server reply, it is treated
+    as a new login attempt (HELLO-FROM is sent immediately), per the spec:
+    "treat any input as a successive login attempt."
+    The only exception is !quit which always exits.
+    Note: forbidden-char checking is skipped when we are already mid-handshake
+    so that inputs like !who reach the server and get rejected there
+    (producing BAD-RQST-HDR), which is what the blocking-login test expects.
+
     Returns True on successful login, False on exit/error.
     """
     pending_username = None
@@ -126,7 +134,6 @@ def login(sock, buffer):
                 if response is None:
                     return False
 
-                # Ignore server messages if we haven't sent anything yet
                 if pending_username is None:
                     continue
 
@@ -158,18 +165,20 @@ def login(sock, buffer):
 
                 username = raw.strip()
 
+                # !quit always exits immediately
                 if username == "!quit":
                     return False
 
-                if contains_forbidden_chars(username):
-                    print(f"Cannot log in as {username}. That username contains disallowed characters.", flush=True)
-                    print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
-                    continue
+                if pending_username is None:
+                    # Not mid-handshake: check forbidden chars client-side
+                    if contains_forbidden_chars(username):
+                        print(f"Cannot log in as {username}. That username contains disallowed characters.", flush=True)
+                        print("Welcome to Chat Client. Enter your login: ", end="", flush=True)
+                        continue
 
-                # Send HELLO-FROM and record the username we used.
-                # If we were already waiting for a server reply, sending a
-                # new HELLO-FROM overwrites pending_username — the server
-                # will reply to the latest attempt.
+                # Either not mid-handshake (passed check above), or mid-handshake
+                # (skip client-side check, let server reject it).
+                # In both cases: send HELLO-FROM and update pending_username.
                 send_msg(sock, f"HELLO-FROM {username}")
                 pending_username = username
 
@@ -186,12 +195,18 @@ def main() -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
+    # Short timeout so connect() fails fast when there is no server,
+    # rather than hanging for the OS default (which would exceed the test timeout).
+    sock.settimeout(5)
+
     try:
         sock.connect((host, port))
     except OSError:
-        # No server available — exit cleanly after having printed the prompt
         sock.close()
         return
+
+    # Back to blocking mode for normal operation
+    sock.settimeout(None)
 
     buffer = [b""]
 
